@@ -49,6 +49,23 @@ describe('Real transaction tests', () => {
     )
   })
 
+  it('can properly decode a Celo Core proxied TX without advanced mode and short addresses', async () => {
+    const parser = new Parser({ abiFetchers: celoAbiFetchers, advancedMode: false, decimalPlaces: 3, addressesLength: 4 })
+    const provider = new ethers.providers.JsonRpcProvider('https://forno.celo.org')
+    const txHash = '0x3d17faf7c8e9e5fdc69570c9b620cf5eb79db2e3e3c1bb6f9f1e1cd72184aeb9'
+    const tx = await provider.getTransaction(txHash)
+    const txDescription = await parser.parseTransactionDescription({
+      from: tx.from,
+      to: tx.to!,
+      data: tx.data,
+      value: tx.value,
+    })
+
+    expect(parser.formatTxDescriptionToHuman(txDescription)).toEqual(
+      `approve(spender: "0xE3...21", value: 115792089237316195423570985008687907853269984665640564039457.584)`
+    )
+  })
+
   it('can decode a Ethereum proxied TX', async () => {
     const parser = new Parser({ abiFetchers: ethAbiFetchers })
     const provider = new ethers.providers.JsonRpcProvider(

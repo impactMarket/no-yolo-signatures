@@ -4,6 +4,7 @@ import { AddressInfoType } from '.'
 import { AbiFetcher, FetchAbiError, getAbisFromFetchers } from './abiFetcher'
 import { AddressFetchResult, AddressInfo, AddressInfoFetcher } from './addressInfo'
 import { Address, Transaction } from './types'
+import { BigNumber } from 'bignumber.js'
 
 export enum ParserErrorTypes {
   NoAbiFetchers = 'NoAbiFetchers',
@@ -38,6 +39,9 @@ export type ParserErrors = FetchAbiError | AbiMismatchError | UnknownError | NoA
 interface ParserConstructorOpts {
   abiFetchers?: AbiFetcher[],
   addressInfoFetchers?: AddressInfoFetcher[]
+  advancedMode?: boolean;
+  decimalPlaces?: number;
+  addressesLength?: number;
 }
 
 export interface ParserResult {
@@ -49,6 +53,9 @@ export interface ParserResult {
 export class Parser {
   public readonly abiFetchers: AbiFetcher[];
   public readonly addressInfoFetchers: AddressInfoFetcher[];
+  public readonly advancedMode: boolean;
+  public readonly addressesLength: number;
+  public readonly decimalPlaces: number;
   /**
    * Creates a new instance of the parser
    * @param abiFetchers Array of AbiFetchers, order matters as priority (i.e. proxy fetcher before plain fetcher)
@@ -56,6 +63,9 @@ export class Parser {
   constructor(opts: ParserConstructorOpts) {
     this.abiFetchers = opts.abiFetchers ? opts.abiFetchers : []
     this.addressInfoFetchers = opts.addressInfoFetchers ? opts.addressInfoFetchers : []
+    this.advancedMode = opts.advancedMode !== undefined ? opts.advancedMode : true
+    this.addressesLength = opts.addressesLength && opts.addressesLength > 3 ? opts.addressesLength : -1
+    this.decimalPlaces = opts.decimalPlaces && opts.decimalPlaces ? opts.decimalPlaces : -1
   }
 
   async parseAsResult(tx: Transaction): Promise<ParserResult> {
@@ -129,11 +139,18 @@ export class Parser {
         .join(', ')}]`
     }
     if (paramType.type === 'uint256') {
-      return paramValue.toString()
+      return this.advancedMode
+        ? paramValue.toString()
+        : new BigNumber(paramValue.toString()).div(new BigNumber(10).pow(18)).toFixed(this.decimalPlaces !== -1 ? this.decimalPlaces : 18)
     }
 
     if (paramType.type === 'address') {
-      return `"${this.formatAddress(paramValue, addressInfo)}"`
+      const formattedValue = this.formatAddress(paramValue, addressInfo)
+      if (this.addressesLength !== -1) {
+        const cut = (this.addressesLength / 2)
+        return `"${formattedValue.slice(0, cut + 2)}...${formattedValue.slice(formattedValue.length - cut, formattedValue.length)}"`
+      }
+      return `"${formattedValue}"`
     }
 
     return paramValue
